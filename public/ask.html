@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ask Question - QueueOverflow</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="logo">QueueOverflow</a>
+            <div class="user-info">
+                <span id="user-display" class="user-badge">Guest</span>
+            </div>
+        </header>
+
+        <main>
+            <h2 style="margin-bottom: 2rem;">Ask a Public Question</h2>
+
+            <form id="ask-form" class="card">
+                <div class="form-group">
+                    <label>Title <span style="color:var(--error)">*</span></label>
+                    <input type="text" name="title" placeholder="e.g. Payment API returns 500 on checkout" required>
+                    <small style="color:var(--text-secondary)">Be specific and imagine you're asking a question to
+                        another person.</small>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>System / Module</label>
+                        <input type="text" name="module" placeholder="e.g. Payments-API">
+                    </div>
+                    <div class="form-group">
+                        <label>Environment</label>
+                        <select name="environment">
+                            <option value="DEV">DEV</option>
+                            <option value="QA">QA</option>
+                            <option value="UAT">UAT</option>
+                            <option value="PROD">PROD</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Error Type</label>
+                    <select name="error_type">
+                        <option value="Runtime Error">Runtime Error</option>
+                        <option value="Build Error">Build Error</option>
+                        <option value="Deployment Issue">Deployment Issue</option>
+                        <option value="Data Issue">Data Issue</option>
+                        <option value="Config Issue">Config Issue</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Error Summary</label>
+                    <textarea name="summary" rows="2" placeholder="Briefly describe what went wrong"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Error Snippet (Log)</label>
+                    <textarea name="snippet" rows="5" style="font-family:monospace;"
+                        placeholder="Copy essential 5-10 lines of log"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>Steps to Reproduce</label>
+                    <textarea name="steps" rows="4" placeholder="1. Go to page X&#10;2. Click button Y"></textarea>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Expected Behaviour</label>
+                        <textarea name="expected" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Observed Behaviour</label>
+                        <textarea name="observed" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Tags</label>
+                    <input type="text" name="tags" placeholder="e.g. java, spring-boot, error-500">
+                </div>
+
+                <button type="submit" class="btn btn-primary">Post Question</button>
+            </form>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>

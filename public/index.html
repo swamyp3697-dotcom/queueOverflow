@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QueueOverflow - Internal Q&A</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="logo">QueueOverflow</a>
+            <div class="search-container">
+                <input type="text" id="global-search" class="search-input"
+                    placeholder="Search questions, errors, logs...">
+                <div id="search-results" class="search-results"></div>
+            </div>
+            <div class="user-info">
+                <div class="notification-wrapper" style="position: relative;">
+                    <button id="notif-btn" class="btn btn-secondary"
+                        style="padding: 0.5rem; border-radius: 50%;">🔔</button>
+                    <span id="notif-badge"
+                        style="display:none; position:absolute; top:-5px; right:-5px; background:var(--error); color:white; font-size:0.7rem; padding:2px 6px; border-radius:10px;">0</span>
+                    <div id="notif-dropdown" class="search-results" style="width: 300px; right: 0; left: auto;">
+                        <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">No new
+                            notifications</div>
+                    </div>
+                </div>
+                <span id="user-display" class="user-badge">Guest</span>
+                <a href="/ask.html" class="btn btn-primary">Ask Question</a>
+            </div>
+        </header>
+
+        <div style="display: grid; grid-template-columns: 1fr 300px; gap: 2rem;">
+            <main>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
+                    <h2>Top Questions</h2>
+                    <div class="filters">
+                        <!-- Future: Filter buttons -->
+                    </div>
+                </div>
+
+                <div id="questions-container">
+                    <!-- Questions injected here -->
+                    <div style="text-align:center; padding:2rem; color:var(--text-secondary);">Loading questions...
+                    </div>
+                </div>
+            </main>
+
+            <aside>
+                <div class="card">
+                    <h3 style="margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;">Top
+                        Users</h3>
+                    <div id="top-users-list">
+                        <div style="color: var(--text-secondary);">Loading...</div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>

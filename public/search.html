@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results - QueueOverFlow</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Fira+Code&display=swap"
+        rel="stylesheet">
+</head>
+
+<body class="hidden">
+    <div class="app-container">
+        <!-- Header -->
+        <header class="main-header">
+            <div class="logo-section">
+                <div class="logo-icon">Q</div>
+                <h1>QueueOverFlow</h1>
+            </div>
+
+            <div class="search-bar-container">
+                <input type="text" id="global-search" placeholder="Search error codes, logs, or tags..."
+                    autocomplete="off">
+                <div id="search-results" class="search-dropdown"></div>
+            </div>
+
+            <div class="user-section">
+                <div class="notification-bell" id="notif-btn">
+                    🔔
+                    <span class="badge" id="notif-badge">0</span>
+                    <div class="notif-dropdown" id="notif-dropdown"></div>
+                </div>
+                <div class="user-profile" id="user-display">
+                    <!-- User info injected here -->
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="content-area">
+            <div class="container">
+                <div class="page-header">
+                    <h2>Search Results for "<span id="search-query-display"></span>"</h2>
+                    <a href="/index.html" class="btn btn-secondary">Back to Home</a>
+                </div>
+
+                <div id="search-results-list" class="questions-list">
+                    <!-- Results injected here -->
+                    <div class="loading-spinner">Searching...</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const query = params.get('q');
+
+            if (query) {
+                document.getElementById('search-query-display').textContent = query;
+                document.getElementById('global-search').value = query; // Pre-fill search bar
+
+                try {
+                    const res = await authFetch(`http://localhost:3000/api/search?q=${encodeURIComponent(query)}`);
+                    const results = await res.json();
+
+                    const container = document.getElementById('search-results-list');
+
+                    if (results.length === 0) {
+                        container.innerHTML = '<div class="empty-state">No results found matching your query.</div>';
+                    } else {
+                        container.innerHTML = results.map(q => `
+                            <div class="question-item">
+                                <div class="stats">
+                                    <div class="stat-box votes">${q.sql_score || 0} votes</div>
+                                    <div class="stat-box">${q.answer_count} answers</div>
+                                    <div class="stat-box score" style="font-size:0.8rem; color:var(--accent);">Match: ${q.relevance_score.toFixed(0)}</div>
+                                </div>
+                                <div class="question-content">
+                                    <h3><a href="/question.html?id=${q.id}">${q.title}</a></h3>
+                                    <p>${q.summary}</p>
+                                    <div class="tags">
+                                        ${q.tags ? q.tags.split(',').map(t => `<span class="tag">${t.trim()}</span>`).join('') : ''}
+                                    </div>
+                                    <div class="meta-info">
+                                        <span>Asked by ${q.author_name}</span>
+                                        <span>${new Date(q.created_at).toLocaleDateString()}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                } catch (err) {
+                    console.error("Search error:", err);
+                    document.getElementById('search-results-list').innerHTML = '<div class="error-state">Error loading results.</div>';
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

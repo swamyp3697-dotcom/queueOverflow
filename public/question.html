@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Detail - QueueOverflow</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container" id="question-detail">
+        <header>
+            <a href="/" class="logo">QueueOverflow</a>
+            <div class="user-info">
+                <span id="user-display" class="user-badge">Guest</span>
+                <a href="/ask.html" class="btn btn-primary">Ask Question</a>
+            </div>
+        </header>
+
+        <main>
+            <div class="detail-header">
+                <h1 id="question-title" style="font-size: 2rem; margin-bottom: 0.5rem;">Loading...</h1>
+                <div id="question-meta" class="meta-info"></div>
+            </div>
+
+            <div style="display: flex; gap: 2rem;">
+                <div class="vote-controls">
+                    <button id="q-upvote" class="vote-btn">▲</button>
+                    <span id="question-score" style="font-size: 1.5rem; font-weight: bold;">0</span>
+                    <button id="q-downvote" class="vote-btn">▼</button>
+                </div>
+
+                <div style="flex: 1;">
+                    <div id="question-body"></div>
+
+                    <div class="comments-section" style="margin-top: 2rem;">
+                        <h4>Comments</h4>
+                        <div id="question-comments"></div>
+                        <form
+                            onsubmit="postComment(event, 'question', new URLSearchParams(window.location.search).get('id'))"
+                            style="margin-top:1rem; display:flex; gap:0.5rem;">
+                            <input type="text" name="content" placeholder="Add a comment..." required>
+                            <button type="submit" class="btn btn-secondary">Post</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="section-title">Answers</h2>
+            <div id="answers-container"></div>
+
+            <h2 class="section-title">Your Answer</h2>
+            <button id="show-answer-form" class="btn btn-primary"
+                onclick="document.getElementById('answer-form').style.display = 'block'; this.style.display = 'none';">Write
+                an Answer</button>
+            <form id="answer-form" class="card" style="display: none;">
+                <div class="form-group">
+                    <label>Root Cause</label>
+                    <textarea name="root_cause" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Why It Happens</label>
+                    <textarea name="why" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Fix Summary <span style="color:var(--error)">*</span></label>
+                    <input type="text" name="fix_summary" required>
+                </div>
+                <div class="form-group">
+                    <label>Detailed Fix Steps</label>
+                    <textarea name="fix_steps" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Configuration / Code Changes</label>
+                    <textarea name="config_changes" rows="4" style="font-family:monospace;"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Validation Steps</label>
+                    <textarea name="validation_steps" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Side Effects / Implications</label>
+                    <textarea name="side_effects" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Related Tickets</label>
+                    <input type="text" name="related_tickets">
+                </div>
+                <button type="submit" class="btn btn-primary">Post Answer</button>
+            </form>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>

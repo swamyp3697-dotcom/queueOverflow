@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - QueueOverflow</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container login-container">
+        <h1 class="logo" style="font-size: 3rem;">QueueOverflow</h1>
+        <p style="color: var(--text-secondary);">Select a user profile to continue</p>
+
+        <div class="user-select">
+            <a href="/auth/google" class="user-card" style="text-decoration:none; color:inherit;">
+                <h3>Login with Google</h3>
+            </a>
+        </div>
+        <div id="login-error" style="color: var(--error); margin-top: 1rem;"></div>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>
