@@ -48,7 +48,7 @@
                 document.getElementById('global-search').value = query; // Pre-fill search bar
 
                 try {
-                    const res = await authFetch(`http://localhost:3000/api/search?q=${encodeURIComponent(query)}`);
+                    const res = await authFetch(`/api/search?q=${encodeURIComponent(query)}`);
                     const results = await res.json();
 
                     const resultsContainer = document.getElementById('search-results-list');

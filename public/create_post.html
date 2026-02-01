@@ -144,7 +144,7 @@
                     formData.append('image', file);
 
                     try {
-                        const res = await authFetch('http://localhost:3000/api/upload', {
+                        const res = await authFetch('/api/upload', {
                             method: 'POST',
                             body: formData
                         });
@@ -183,7 +183,7 @@
                 }
 
                 try {
-                    const res = await authFetch('http://localhost:3000/api/posts', {
+                    const res = await authFetch('/api/posts', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

@@ -92,7 +92,7 @@
             if (!id) return;
 
             try {
-                const res = await authFetch(`http://localhost:3000/api/posts/${id}`);
+                const res = await authFetch(`/api/posts/${id}`);
                 if (!res.ok) throw new Error("Post not found");
 
                 const post = await res.json();
@@ -130,7 +130,7 @@
                     formData.append('parent_id', id);
                     formData.append('author_id', currentUser.id);
 
-                    const res = await authFetch('http://localhost:3000/api/comments', {
+                    const res = await authFetch('/api/comments', {
                         method: 'POST',
                         body: formData
                     });
