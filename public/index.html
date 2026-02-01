@@ -29,6 +29,7 @@
                     </div>
                 </div>
                 <span id="user-display" class="user-badge">Guest</span>
+                <a href="/create_post.html" class="btn btn-secondary" style="margin-right: 0.5rem;">Create Post</a>
                 <a href="/ask.html" class="btn btn-primary">Ask Question</a>
             </div>
         </header>
@@ -36,16 +37,19 @@
         <div style="display: grid; grid-template-columns: 1fr 300px; gap: 2rem;">
             <main>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
-                    <h2>Top Questions</h2>
+                    <div style="display:flex; gap:1rem;">
+                        <button id="tab-questions" class="btn btn-primary"
+                            onclick="switchTab('questions')">Questions</button>
+                        <button id="tab-posts" class="btn btn-secondary" onclick="switchTab('posts')">Posts</button>
+                    </div>
                     <div class="filters">
                         <!-- Future: Filter buttons -->
                     </div>
                 </div>
 
                 <div id="questions-container">
-                    <!-- Questions injected here -->
-                    <div style="text-align:center; padding:2rem; color:var(--text-secondary);">Loading questions...
-                    </div>
+                    <!-- Questions/Posts injected here -->
+                    <div style="text-align:center; padding:2rem; color:var(--text-secondary);">Loading...</div>
                 </div>
             </main>
 

@@ -12,28 +12,12 @@
 
 <body class="hidden">
     <div class="app-container">
-        <!-- Header -->
-        <header class="main-header">
-            <div class="logo-section">
-                <div class="logo-icon">Q</div>
-                <h1>QueueOverFlow</h1>
-            </div>
-
-            <div class="search-bar-container">
+        <!-- Simplified Header -->
+        <header class="main-header" style="justify-content: center; border-bottom: none; margin-bottom: 1rem;">
+            <div class="search-bar-container" style="width: 100%; max-width: 800px; margin: 0;">
                 <input type="text" id="global-search" placeholder="Search error codes, logs, or tags..."
-                    autocomplete="off">
+                    autocomplete="off" style="width: 100%;">
                 <div id="search-results" class="search-dropdown"></div>
-            </div>
-
-            <div class="user-section">
-                <div class="notification-bell" id="notif-btn">
-                    🔔
-                    <span class="badge" id="notif-badge">0</span>
-                    <div class="notif-dropdown" id="notif-dropdown"></div>
-                </div>
-                <div class="user-profile" id="user-display">
-                    <!-- User info injected here -->
-                </div>
             </div>
         </header>
 
@@ -67,32 +51,39 @@
                     const res = await authFetch(`http://localhost:3000/api/search?q=${encodeURIComponent(query)}`);
                     const results = await res.json();
 
-                    const container = document.getElementById('search-results-list');
+                    const resultsContainer = document.getElementById('search-results-list');
 
                     if (results.length === 0) {
-                        container.innerHTML = '<div class="empty-state">No results found matching your query.</div>';
-                    } else {
-                        container.innerHTML = results.map(q => `
-                            <div class="question-item">
-                                <div class="stats">
-                                    <div class="stat-box votes">${q.sql_score || 0} votes</div>
-                                    <div class="stat-box">${q.answer_count} answers</div>
-                                    <div class="stat-box score" style="font-size:0.8rem; color:var(--accent);">Match: ${q.relevance_score.toFixed(0)}</div>
-                                </div>
-                                <div class="question-content">
-                                    <h3><a href="/question.html?id=${q.id}">${q.title}</a></h3>
-                                    <p>${q.summary}</p>
-                                    <div class="tags">
-                                        ${q.tags ? q.tags.split(',').map(t => `<span class="tag">${t.trim()}</span>`).join('') : ''}
-                                    </div>
-                                    <div class="meta-info">
-                                        <span>Asked by ${q.author_name}</span>
-                                        <span>${new Date(q.created_at).toLocaleDateString()}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('');
+                        resultsContainer.innerHTML = '<div style="text-align:center; padding:2rem;">No results found.</div>';
+                        return;
                     }
+
+                    resultsContainer.innerHTML = results.map(item => {
+                        const isPost = item.type === 'post';
+                        const link = isPost ? `/post.html?id=${item.id}` : `/question.html?id=${item.id}`;
+                        const badge = isPost ? '<span class="tag" style="color:white;">Post</span>' : '<span class="tag" style="color:white;">Question</span>';
+
+                        return `
+                <div class="question-item">
+                    <div class="stats">
+                        <div class="stat-box">
+                            <span class="stat-value">${item.relevance_score.toFixed(1)}</span>
+                            <span class="stat-label">score</span>
+                        </div>
+                    </div>
+                    <div class="question-content">
+                        <h3><a href="${link}">${item.title}</a> ${badge}</h3>
+                        <p class="summary">${item.summary || item.content?.substring(0, 150) + '...'}</p>
+                        <div class="tags">
+                            ${(item.tags || '').split(',').map(t => t.trim() ? `<span class="tag">${t.trim()}</span>` : '').join('')}
+                        </div>
+                        <div class="meta-info">
+                            ${isPost ? 'Posted' : 'Asked'} by <span class="author">${item.author_name}</span> 
+                            on ${new Date(item.created_at).toLocaleDateString()}
+                        </div>
+                    </div>
+                </div>
+            `}).join('');
                 } catch (err) {
                     console.error("Search error:", err);
                     document.getElementById('search-results-list').innerHTML = '<div class="error-state">Error loading results.</div>';

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Post - QueueOverflow</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .post-content img {
+            max-width: 100%;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+
+        .post-content h1,
+        .post-content h2,
+        .post-content h3 {
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .post-content p {
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .post-content pre {
+            background: #f4f4f4;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        /* Dark mode adjustments for code blocks */
+        @media (prefers-color-scheme: dark) {
+            .post-content pre {
+                background: #2d2d2d;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="logo">QueueOverflow</a>
+            <div class="user-info">
+                <span id="user-display" class="user-badge">Guest</span>
+                <a href="/create_post.html" class="btn btn-secondary">Create Post</a>
+                <a href="/ask.html" class="btn btn-primary">Ask Question</a>
+            </div>
+        </header>
+
+        <main>
+            <div class="card">
+                <h1 id="post-title" style="font-size: 2.5rem; margin-bottom: 0.5rem;">Loading...</h1>
+                <div id="post-meta" class="meta-info"
+                    style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;"></div>
+
+                <div style="display: flex; gap: 2rem;">
+                    <div class="vote-controls">
+                        <button id="p-upvote" class="vote-btn">▲</button>
+                        <span id="post-score" style="font-size: 1.5rem; font-weight: bold;">0</span>
+                        <button id="p-downvote" class="vote-btn">▼</button>
+                    </div>
+                    <div style="flex: 1;">
+                        <div id="post-content" class="post-content"></div>
+
+                        <div class="comments-section" style="margin-top: 2rem;">
+                            <h4>Comments</h4>
+                            <div id="post-comments"></div>
+                            <form id="post-comment-form"
+                                style="margin-top:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                <input type="text" name="content" placeholder="Add a comment..." required
+                                    style="flex:1;">
+                                <input type="file" name="image" accept="image/*" style="width:auto;">
+                                <button type="submit" class="btn btn-secondary">Post</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const id = params.get('id');
+            if (!id) return;
+
+            try {
+                const res = await authFetch(`http://localhost:3000/api/posts/${id}`);
+                if (!res.ok) throw new Error("Post not found");
+
+                const post = await res.json();
+
+                document.title = `${post.title} - QueueOverflow`;
+                document.getElementById('post-title').textContent = post.title;
+                document.getElementById('post-meta').innerHTML = `
+                    Posted by <strong>${post.author_name}</strong> on ${new Date(post.created_at).toLocaleDateString()}
+                    ${post.author_avatar ? `<img src="${post.author_avatar}" style="width:24px; height:24px; border-radius:50%; vertical-align:middle; margin-left:0.5rem;">` : ''}
+                `;
+                document.getElementById('post-score').textContent = post.score;
+
+                // Render Markdown
+                document.getElementById('post-content').innerHTML = marked.parse(post.content);
+
+                // Render Comments
+                const commentsContainer = document.getElementById('post-comments');
+                commentsContainer.innerHTML = post.comments.map(c => `
+                    <div class="comment">
+                        ${c.content} 
+                        ${c.image_url ? `<br><a href="${c.image_url}" target="_blank" style="font-size:0.8rem; color:var(--accent);">[View Image]</a>` : ''}
+                        - <small>${c.author_name}</small>
+                    </div>
+                `).join('');
+
+                // Setup Vote Buttons
+                document.getElementById('p-upvote').onclick = () => vote('post', id, 1);
+                document.getElementById('p-downvote').onclick = () => vote('post', id, -1);
+
+                // Setup Comment Form
+                document.getElementById('post-comment-form').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.target);
+                    formData.append('parent_type', 'post');
+                    formData.append('parent_id', id);
+                    formData.append('author_id', currentUser.id);
+
+                    const res = await authFetch('http://localhost:3000/api/comments', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (res.ok) {
+                        window.location.reload();
+                    }
+                });
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('post-content').innerHTML = '<p class="error">Error loading post.</p>';
+            }
+        });
+    </script>
+</body>
+
+</html>

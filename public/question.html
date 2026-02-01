@@ -14,6 +14,7 @@
             <a href="/" class="logo">QueueOverflow</a>
             <div class="user-info">
                 <span id="user-display" class="user-badge">Guest</span>
+                <a href="/create_post.html" class="btn btn-secondary" style="margin-right: 0.5rem;">Create Post</a>
                 <a href="/ask.html" class="btn btn-primary">Ask Question</a>
             </div>
         </header>
@@ -39,8 +40,9 @@
                         <div id="question-comments"></div>
                         <form
                             onsubmit="postComment(event, 'question', new URLSearchParams(window.location.search).get('id'))"
-                            style="margin-top:1rem; display:flex; gap:0.5rem;">
-                            <input type="text" name="content" placeholder="Add a comment..." required>
+                            style="margin-top:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                            <input type="text" name="content" placeholder="Add a comment..." required style="flex:1;">
+                            <input type="file" name="image" accept="image/*" style="width:auto;">
                             <button type="submit" class="btn btn-secondary">Post</button>
                         </form>
                     </div>
@@ -86,6 +88,10 @@
                 <div class="form-group">
                     <label>Related Tickets</label>
                     <input type="text" name="related_tickets">
+                </div>
+                <div class="form-group">
+                    <label>Attachment (Image)</label>
+                    <input type="file" name="image" accept="image/*">
                 </div>
                 <button type="submit" class="btn btn-primary">Post Answer</button>
             </form>

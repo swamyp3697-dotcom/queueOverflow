@@ -11,8 +11,7 @@ function checkAuth() {
         const user = {
             id: params.get('id'),
             username: params.get('username'),
-            avatar_url: params.get('avatar_url'),
-            type: 'actual'
+            avatar_url: params.get('avatar_url')
         };
         localStorage.setItem('currentUser', JSON.stringify(user));
         localStorage.setItem('accessToken', params.get('accessToken'));
@@ -106,46 +105,91 @@ async function authFetch(url, options = {}) {
     return res;
 }
 
-// Fetch Questions
-async function loadQuestions() {
+// Load Questions or Posts
+async function loadItems(type = 'questions') {
     const container = document.getElementById('questions-container');
     if (!container) return;
 
-    const res = await authFetch(`${API_URL}/questions`);
-    const questions = await res.json();
+    container.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-secondary);">Loading...</div>';
 
-    container.innerHTML = questions.map(q => `
+    try {
+        const endpoint = type === 'questions' ? '/questions' : '/posts';
+        const res = await authFetch(`${API_URL}${endpoint}`);
+        if (!res.ok) throw new Error(`Failed to load ${type}`);
+
+        const items = await res.json();
+        renderItems(items, container);
+    } catch (err) {
+        console.error("Error loading items:", err);
+        container.innerHTML = `<div style="text-align:center; padding:2rem; color:var(--error);">Error loading content. Please try again.</div>`;
+    }
+}
+
+// Render Items (Questions or Posts)
+function renderItems(items, container) {
+    container.innerHTML = items.map(item => {
+        const isPost = item.type === 'post' || !item.error_type; // Fallback detection
+        const link = isPost ? `/post.html?id=${item.id}` : `/question.html?id=${item.id}`;
+
+        // Tags: Only show if they exist and are not empty
+        const tagsHtml = item.tags ?
+            item.tags.split(',')
+                .map(t => t.trim())
+                .filter(t => t)
+                .map(t => `<span class="tag">${t}</span>`)
+                .join('')
+            : '';
+
+        return `
         <div class="question-item">
             <div class="stats">
-                <div class="stat-box votes">${q.score} votes</div>
-                <div class="stat-box">${q.answer_count} answers</div>
+                <div class="stat-box votes">${item.score || 0} votes</div>
+                <div class="stat-box ${item.answer_count > 0 ? 'answered' : ''}">
+                    ${item.answer_count || item.comment_count || 0} ${isPost ? 'comments' : 'answers'}
+                </div>
             </div>
             <div class="question-content">
-                <h3><a href="/question.html?id=${q.id}">${q.title}</a></h3>
-                <p>${q.summary}</p>
+                <h3><a href="${link}">${item.title}</a></h3>
+                <p class="summary">${item.summary || item.content?.substring(0, 150) + '...'}</p>
                 <div class="tags">
-                    ${q.tags ? q.tags.split(',').map(t => `<span class="tag">${t.trim()}</span>`).join('') : ''}
+                    ${tagsHtml}
                 </div>
                 <div class="meta-info">
-                    <span>Asked by ${q.author_name}</span>
-                    <span>${new Date(q.created_at).toLocaleDateString()}</span>
+                    ${isPost ? 'Posted' : 'Asked'} by <span class="author">${item.author_name}</span> 
+                    on ${new Date(item.created_at).toLocaleDateString()}
                 </div>
             </div>
         </div>
-    `).join('');
+    `}).join('');
+}
+
+// Tab Switching
+window.switchTab = function (tab) {
+    // Update Buttons
+    document.getElementById('tab-questions').className = tab === 'questions' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('tab-posts').className = tab === 'posts' ? 'btn btn-primary' : 'btn btn-secondary';
+
+    // Load Content
+    loadItems(tab);
 }
 
 // Post Question
+let askEditor;
+
 async function postQuestion(e) {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const data = Object.fromEntries(formData.entries());
-    data.author_id = currentUser.id;
+    formData.append('author_id', currentUser.id);
+
+    // Get content from EasyMDE
+    if (askEditor) {
+        formData.append('content', askEditor.value());
+    }
 
     const res = await authFetch(`${API_URL}/questions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        // Content-Type header must NOT be set when sending FormData, browser sets it with boundary
+        body: formData
     });
 
     if (res.ok) {
@@ -163,22 +207,38 @@ async function loadQuestionDetail() {
     const q = await res.json();
 
     document.getElementById('question-title').textContent = q.title;
-    document.getElementById('question-meta').innerHTML = `
-        Asked by <strong>${q.author_name}</strong> on ${new Date(q.created_at).toLocaleDateString()}
-        | Module: ${q.module} | Env: ${q.environment}
-    `;
+
+    let metaHtml = `Asked by <strong>${q.author_name}</strong> on ${new Date(q.created_at).toLocaleDateString()}`;
+    if (q.module) metaHtml += ` | Module: ${q.module}`;
+    if (q.environment) metaHtml += ` | Env: ${q.environment}`;
+
+    document.getElementById('question-meta').innerHTML = metaHtml;
 
     // Render Question Body
-    const bodyHtml = `
-        <div class="md-content">
-            <p><strong>Error Summary:</strong> ${q.summary}</p>
-            <p><strong>Error Type:</strong> ${q.error_type}</p>
-            <pre><code>${q.snippet}</code></pre>
-            <p><strong>Steps to Reproduce:</strong><br>${q.steps}</p>
-            <p><strong>Expected:</strong> ${q.expected}</p>
-            <p><strong>Observed:</strong> ${q.observed}</p>
-        </div>
-    `;
+    let bodyHtml = '';
+
+    if (q.content) {
+        // New Format (Rich Text)
+        bodyHtml = `
+            <div class="md-content">
+                ${marked.parse(q.content)}
+                ${q.image_url ? `<div class="image-attachment"><img src="${q.image_url}" alt="Question Attachment" style="max-width:100%; margin-top:1rem; border-radius:4px;"></div>` : ''}
+            </div>
+        `;
+    } else {
+        // Legacy Format (Fallback)
+        bodyHtml = `
+            <div class="md-content">
+                ${q.summary ? `<p><strong>Error Summary:</strong> ${q.summary}</p>` : ''}
+                ${q.error_type ? `<p><strong>Error Type:</strong> ${q.error_type}</p>` : ''}
+                ${q.snippet ? `<pre><code>${q.snippet}</code></pre>` : ''}
+                ${q.steps ? `<p><strong>Steps to Reproduce:</strong><br>${q.steps}</p>` : ''}
+                ${q.expected ? `<p><strong>Expected:</strong> ${q.expected}</p>` : ''}
+                ${q.observed ? `<p><strong>Observed:</strong> ${q.observed}</p>` : ''}
+                ${q.image_url ? `<div class="image-attachment"><img src="${q.image_url}" alt="Question Attachment" style="max-width:100%; margin-top:1rem; border-radius:4px;"></div>` : ''}
+            </div>
+        `;
+    }
     document.getElementById('question-body').innerHTML = bodyHtml;
     document.getElementById('question-score').textContent = q.score;
 
@@ -198,6 +258,7 @@ async function loadQuestionDetail() {
                         <p><strong>Fix:</strong> ${a.fix_summary}</p>
                         <pre><code>${a.config_changes || 'No code changes'}</code></pre>
                         <p><strong>Validation:</strong> ${a.validation_steps}</p>
+                        ${a.image_url ? `<div class="image-attachment"><img src="${a.image_url}" alt="Answer Attachment" style="max-width:100%; margin-top:1rem; border-radius:4px;"></div>` : ''}
                     </div>
                     <div class="meta-info">
                         <span>Answered by ${a.author_name}</span>
@@ -205,9 +266,16 @@ async function loadQuestionDetail() {
                     
                     <!-- Comments -->
                     <div class="comments-section">
-                        ${a.comments.map(c => `<div class="comment">${c.content} - <small>${c.author_name}</small></div>`).join('')}
-                        <form onsubmit="postComment(event, 'answer', ${a.id})" style="margin-top:1rem; display:flex; gap:0.5rem;">
-                            <input type="text" name="content" placeholder="Add a comment..." required>
+                        ${a.comments.map(c => `
+                            <div class="comment">
+                                ${c.content} 
+                                ${c.image_url ? `<br><a href="${c.image_url}" target="_blank" style="font-size:0.8rem; color:var(--accent);">[View Image]</a>` : ''}
+                                - <small>${c.author_name}</small>
+                            </div>
+                        `).join('')}
+                        <form onsubmit="postComment(event, 'answer', ${a.id})" style="margin-top:1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                            <input type="text" name="content" placeholder="Add a comment..." required style="flex:1;">
+                            <input type="file" name="image" accept="image/*" style="width:auto;">
                             <button type="submit" class="btn btn-secondary" style="padding:0.5rem;">Post</button>
                         </form>
                     </div>
@@ -218,7 +286,13 @@ async function loadQuestionDetail() {
 
     // Question Comments
     const qComments = document.getElementById('question-comments');
-    qComments.innerHTML = q.comments.map(c => `<div class="comment">${c.content} - <small>${c.author_name}</small></div>`).join('');
+    qComments.innerHTML = q.comments.map(c => `
+        <div class="comment">
+            ${c.content} 
+            ${c.image_url ? `<br><a href="${c.image_url}" target="_blank" style="font-size:0.8rem; color:var(--accent);">[View Image]</a>` : ''}
+            - <small>${c.author_name}</small>
+        </div>
+    `).join('');
 
     // Setup Answer Form
     document.getElementById('answer-form').onsubmit = (e) => postAnswer(e, id);
@@ -232,13 +306,11 @@ async function loadQuestionDetail() {
 async function postAnswer(e, questionId) {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const data = Object.fromEntries(formData.entries());
-    data.author_id = currentUser.id;
+    formData.append('author_id', currentUser.id);
 
     const res = await authFetch(`${API_URL}/questions/${questionId}/answers`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: formData
     });
 
     if (res.ok) {
@@ -249,18 +321,14 @@ async function postAnswer(e, questionId) {
 // Post Comment
 async function postComment(e, type, id) {
     e.preventDefault();
-    const input = e.target.querySelector('input');
-    const content = input.value;
+    const formData = new FormData(e.target);
+    formData.append('parent_type', type);
+    formData.append('parent_id', id);
+    formData.append('author_id', currentUser.id);
 
     const res = await authFetch(`${API_URL}/comments`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            parent_type: type,
-            parent_id: id,
-            content,
-            author_id: currentUser.id
-        })
+        body: formData
     });
 
     if (res.ok) {
@@ -290,11 +358,57 @@ async function vote(type, id, value) {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 
-    if (document.getElementById('questions-container')) loadQuestions();
+    if (document.getElementById('questions-container')) {
+        loadItems('questions'); // Default tab
+        loadTopUsers();
+    }
     if (document.getElementById('question-detail')) loadQuestionDetail();
 
     const askForm = document.getElementById('ask-form');
-    if (askForm) askForm.addEventListener('submit', postQuestion);
+    if (askForm) {
+        askForm.addEventListener('submit', postQuestion);
+        // Init EasyMDE
+        askEditor = new EasyMDE({
+            element: document.getElementById('description-editor'),
+            uploadImage: true,
+            sideBySideFullscreen: false,
+            imageUploadFunction: async (file, onSuccess, onError) => {
+                const formData = new FormData();
+                formData.append('image', file);
+
+                try {
+                    const res = await authFetch(`${API_URL}/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (data.url) {
+                        onSuccess(data.url);
+                    } else {
+                        onError(data.error || 'Upload failed');
+                    }
+                } catch (err) {
+                    onError(err.message);
+                }
+            },
+            toolbar: [
+                "bold", "italic", "heading", "|",
+                "quote", "unordered-list", "ordered-list", "|",
+                "link", "image", "|",
+                "preview", "side-by-side", "|",
+                "guide"
+            ],
+            placeholder: "Describe your issue here... (Markdown supported)",
+            minHeight: "500px"
+        });
+
+        // Force Side-by-Side Mode
+        setTimeout(() => {
+            if (!askEditor.isSideBySideActive()) {
+                askEditor.toggleSideBySide();
+            }
+        }, 100);
+    }
 
     // Search Logic
     const searchInput = document.getElementById('global-search');

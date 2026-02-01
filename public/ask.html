@@ -6,6 +6,103 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ask Question - QueueOverflow</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .editor-container {
+            margin-top: 1rem;
+        }
+
+        /* Toolbar Fixes */
+        .editor-toolbar {
+            background-color: #f9f9f9 !important;
+            border-color: #ccc !important;
+            opacity: 1 !important;
+        }
+
+        .editor-toolbar i {
+            color: #555 !important;
+        }
+
+        .editor-toolbar a {
+            color: #555 !important;
+        }
+
+        .editor-toolbar a:hover,
+        .editor-toolbar a.active {
+            background-color: #e0e0e0 !important;
+            border-color: #bbb !important;
+        }
+
+        /* 60/40 Split View & Dark Mode */
+        .EasyMDEContainer .CodeMirror {
+            width: 60% !important;
+            min-height: 500px;
+            background-color: #1e1e1e;
+            /* Dark Editor */
+            color: #e0e0e0;
+            border-color: #444;
+        }
+
+        .EasyMDEContainer .CodeMirror-cursor {
+            border-left: 1px solid #fff;
+        }
+
+        .EasyMDEContainer .editor-preview-side {
+            width: 40% !important;
+            border-left: 1px solid #444;
+            display: block !important;
+            position: static !important;
+            height: auto !important;
+            min-height: 500px;
+            background-color: #000000 !important;
+            /* Black Preview Background */
+            color: #ffffff !important;
+            /* White Preview Text */
+            padding: 1rem;
+        }
+
+        /* Preview Content Styling */
+        .editor-preview-side h1,
+        .editor-preview-side h2,
+        .editor-preview-side h3 {
+            color: #ffffff !important;
+            border-bottom: 1px solid #444;
+        }
+
+        .editor-preview-side a {
+            color: #64b5f6 !important;
+        }
+
+        .editor-preview-side pre {
+            background: #2d2d2d !important;
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+
+        .editor-preview-side code {
+            background: #2d2d2d !important;
+            color: #e0e0e0 !important;
+        }
+
+        .editor-preview-side ul,
+        .editor-preview-side ol {
+            padding-left: 2rem !important;
+        }
+
+        /* Ensure container flexes */
+        .EasyMDEContainer {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        /* Fix toolbar width */
+        .editor-toolbar {
+            width: 100% !important;
+            border-radius: 4px 4px 0 0;
+        }
+    </style>
 </head>
 
 <body>
@@ -14,6 +111,7 @@
             <a href="/" class="logo">QueueOverflow</a>
             <div class="user-info">
                 <span id="user-display" class="user-badge">Guest</span>
+                <a href="/create_post.html" class="btn btn-secondary" style="margin-right: 0.5rem;">Create Post</a>
             </div>
         </header>
 
@@ -28,63 +126,21 @@
                         another person.</small>
                 </div>
 
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div class="form-group">
-                        <label>System / Module</label>
-                        <input type="text" name="module" placeholder="e.g. Payments-API">
-                    </div>
-                    <div class="form-group">
-                        <label>Environment</label>
-                        <select name="environment">
-                            <option value="DEV">DEV</option>
-                            <option value="QA">QA</option>
-                            <option value="UAT">UAT</option>
-                            <option value="PROD">PROD</option>
-                        </select>
-                    </div>
-                </div>
-
                 <div class="form-group">
-                    <label>Error Type</label>
-                    <select name="error_type">
-                        <option value="Runtime Error">Runtime Error</option>
-                        <option value="Build Error">Build Error</option>
-                        <option value="Deployment Issue">Deployment Issue</option>
-                        <option value="Data Issue">Data Issue</option>
-                        <option value="Config Issue">Config Issue</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label>Error Summary</label>
-                    <textarea name="summary" rows="2" placeholder="Briefly describe what went wrong"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>Error Snippet (Log)</label>
-                    <textarea name="snippet" rows="5" style="font-family:monospace;"
-                        placeholder="Copy essential 5-10 lines of log"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>Steps to Reproduce</label>
-                    <textarea name="steps" rows="4" placeholder="1. Go to page X&#10;2. Click button Y"></textarea>
-                </div>
-
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div class="form-group">
-                        <label>Expected Behaviour</label>
-                        <textarea name="expected" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Observed Behaviour</label>
-                        <textarea name="observed" rows="3"></textarea>
-                    </div>
+                    <label>Description <span style="color:var(--error)">*</span></label>
+                    <textarea id="description-editor" name="content"></textarea>
+                    <small style="color:var(--text-secondary)">Include all the information someone would need to answer
+                        your question.</small>
                 </div>
 
                 <div class="form-group">
                     <label>Tags</label>
                     <input type="text" name="tags" placeholder="e.g. java, spring-boot, error-500">
+                </div>
+
+                <div class="form-group">
+                    <label>Attachment (Image)</label>
+                    <input type="file" name="image" accept="image/*">
                 </div>
 
                 <button type="submit" class="btn btn-primary">Post Question</button>

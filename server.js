@@ -7,6 +7,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
 const natural = require('natural');
+const multer = require('multer');
 require('dotenv').config();
 
 const app = express();
@@ -17,6 +18,18 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false }
 });
+
+// Multer Storage Config
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'public/uploads/')
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname)); // e.g. 123456789.png
+    }
+});
+const upload = multer({ storage: storage });
 
 // Search Index (In-Memory)
 const tfidf = new natural.TfIdf();
@@ -71,6 +84,7 @@ function initializeDatabase() {
             expected TEXT,
             observed TEXT,
             tags TEXT,
+            image_url TEXT,
             author_id INTEGER REFERENCES users(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -82,6 +96,7 @@ function initializeDatabase() {
             fix_summary TEXT,
             config_changes TEXT,
             validation_steps TEXT,
+            image_url TEXT,
             author_id INTEGER REFERENCES users(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -91,6 +106,7 @@ function initializeDatabase() {
             parent_type TEXT, -- 'question' or 'answer'
             parent_id INTEGER,
             content TEXT,
+            image_url TEXT,
             author_id INTEGER REFERENCES users(id),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -113,6 +129,14 @@ function initializeDatabase() {
             is_read BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS posts (
+            id SERIAL PRIMARY KEY,
+            title TEXT,
+            content TEXT, -- Markdown
+            author_id INTEGER REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         
         -- Indexes
         CREATE INDEX IF NOT EXISTS idx_questions_author ON questions(author_id);
@@ -121,6 +145,7 @@ function initializeDatabase() {
         CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_type, parent_id);
         CREATE INDEX IF NOT EXISTS idx_votes_target ON votes(target_type, target_id);
         CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+        CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(author_id);
     `;
 
     pool.query(schema, (err, res) => {
@@ -128,8 +153,20 @@ function initializeDatabase() {
             console.error("Error initializing database:", err);
         } else {
             console.log("Database schema initialized (PostgreSQL).");
-            seedData();
-            buildSearchIndex();
+
+            // Add image_url columns if they don't exist (Migration)
+            const migrationSql = `
+                ALTER TABLE questions ADD COLUMN IF NOT EXISTS image_url TEXT;
+                ALTER TABLE answers ADD COLUMN IF NOT EXISTS image_url TEXT;
+                ALTER TABLE comments ADD COLUMN IF NOT EXISTS image_url TEXT;
+            `;
+            pool.query(migrationSql, (migErr, migRes) => {
+                if (migErr) console.log("Migration note: Columns might already exist or error:", migErr.message);
+                else console.log("Schema migration (image_url) applied.");
+
+                seedData();
+                buildSearchIndex();
+            });
         }
     });
 }
@@ -257,7 +294,90 @@ app.use('/api', (req, res, next) => {
     authenticateToken(req, res, next);
 });
 
-// Get all questions (LIMIT 5 for Home Page)
+// Generic Upload API
+app.post('/api/upload', upload.single('image'), (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    const url = `/uploads/${req.file.filename}`;
+    res.json({ url: url });
+});
+
+// Posts APIs
+app.post('/api/posts', (req, res) => {
+    const { title, content, author_id } = req.body;
+
+    if (!title || !content) {
+        return res.status(400).json({ error: "Title and Content are required." });
+    }
+
+    const sql = `INSERT INTO posts (title, content, author_id) VALUES ($1, $2, $3) RETURNING id`;
+    pool.query(sql, [title, content, author_id], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ id: result.rows[0].id });
+    });
+});
+
+app.get('/api/posts/:id', (req, res) => {
+    const sql = `
+        SELECT p.*, u.username as author_name, u.avatar_url as author_avatar,
+        (SELECT COALESCE(SUM(value), 0) FROM votes WHERE target_type = 'post' AND target_id = p.id) as score
+        FROM posts p
+        LEFT JOIN users u ON p.author_id = u.id
+        WHERE p.id = $1
+    `;
+    pool.query(sql, [req.params.id], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (result.rows.length === 0) return res.status(404).json({ error: "Post not found" });
+
+        const post = result.rows[0];
+
+        // Fetch comments for post
+        const commentsSql = `
+            SELECT c.*, u.username as author_name 
+            FROM comments c
+            LEFT JOIN users u ON c.author_id = u.id
+            WHERE c.parent_type = 'post' AND c.parent_id = $1
+            ORDER BY c.created_at ASC
+        `;
+
+        pool.query(commentsSql, [req.params.id], (err, resC) => {
+            if (err) return res.status(500).json({ error: err.message });
+            post.comments = resC.rows;
+            res.json(post);
+        });
+    });
+});
+
+app.get('/api/posts', (req, res) => {
+    const sql = `
+        SELECT p.*, u.username as author_name,
+        (SELECT COALESCE(SUM(value), 0) FROM votes WHERE target_type = 'post' AND target_id = p.id) as score,
+        (SELECT COUNT(*) FROM comments WHERE parent_type = 'post' AND parent_id = p.id) as comment_count
+        FROM posts p
+        LEFT JOIN users u ON p.author_id = u.id
+        ORDER BY p.created_at DESC
+        LIMIT 20
+    `;
+    pool.query(sql, (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(cleanResponse(result.rows));
+    });
+});
+
+
+// Helper to remove null/empty values
+const cleanResponse = (rows) => {
+    return rows.map(row => {
+        const cleaned = {};
+        Object.keys(row).forEach(key => {
+            if (row[key] !== null && row[key] !== "" && row[key] !== undefined) {
+                cleaned[key] = row[key];
+            }
+        });
+        return cleaned;
+    });
+};
+
+// Get all questions (LIMIT 20 for Home Page)
 app.get('/api/questions', (req, res) => {
     const sql = `
         SELECT q.*, u.username as author_name, 
@@ -266,15 +386,15 @@ app.get('/api/questions', (req, res) => {
         FROM questions q
         LEFT JOIN users u ON q.author_id = u.id
         ORDER BY q.created_at DESC
-        LIMIT 5
+        LIMIT 20
     `;
     pool.query(sql, (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(result.rows);
+        res.json(cleanResponse(result.rows));
     });
 });
 
-// Search questions (Hybrid: SQL + TF-IDF)
+// Search (Unified: Questions + Posts)
 app.get('/api/search', (req, res) => {
     const query = req.query.q;
     if (!query) return res.json([]);
@@ -289,71 +409,93 @@ app.get('/api/search', (req, res) => {
 
     if (keywords.length === 0) return res.json([]);
 
-    // 2. TF-IDF Scoring (In-Memory)
-    const tfidfScores = {};
-    tfidf.tfidfs(keywords.join(' '), function (i, measure) {
-        if (measure > 0) {
-            const qId = searchIndexMap[i];
-            tfidfScores[qId] = measure;
-        }
-    });
-
-    // 3. SQL Search (Broad Match)
+    // 2. SQL Search (Union Questions & Posts)
     const sqlKeywords = query.toLowerCase().split(/[\s,?.!]+/).filter(w => w.length > 1 && !stopWords.has(w));
 
-    let scoreCalculation = '';
+    let scoreCalculationQ = '';
+    let scoreCalculationP = '';
     const params = [];
 
     sqlKeywords.forEach((k, index) => {
         const p = `%${k}%`;
         // Postgres ILIKE is case insensitive
-        const termScore = `
-            (CASE WHEN q.title ILIKE $${index * 4 + 1} THEN 3 ELSE 0 END) +
-            (CASE WHEN q.tags ILIKE $${index * 4 + 2} THEN 2 ELSE 0 END) +
-            (CASE WHEN q.summary ILIKE $${index * 4 + 3} OR q.error_type ILIKE $${index * 4 + 4} THEN 1 ELSE 0 END)
-        `;
-        scoreCalculation += (index > 0 ? ' + ' : '') + termScore;
+        const termScoreQ = `(CASE WHEN q.title ILIKE $${index * 4 + 1} THEN 3 ELSE 0 END) + (CASE WHEN q.tags ILIKE $${index * 4 + 2} THEN 2 ELSE 0 END) + (CASE WHEN q.summary ILIKE $${index * 4 + 3} OR q.error_type ILIKE $${index * 4 + 4} THEN 1 ELSE 0 END)`;
+        scoreCalculationQ += (index > 0 ? ' + ' : '') + termScoreQ;
+
+        // For Posts (using same params for simplicity, though indices shift if we were dynamic, here we reuse)
+        // Actually, we can't easily reuse params in a UNION with different indices unless we duplicate.
+        // Simpler approach: Construct the WHERE clause for both.
         params.push(p, p, p, p);
     });
 
-    const whereConditions = sqlKeywords.map((_, index) => `(q.title ILIKE $${index * 4 + 1} OR q.summary ILIKE $${index * 4 + 3} OR q.tags ILIKE $${index * 4 + 2} OR q.error_type ILIKE $${index * 4 + 4})`).join(' OR ');
+    const whereConditionsQ = sqlKeywords.map((_, index) => `(q.title ILIKE $${index * 4 + 1} OR q.summary ILIKE $${index * 4 + 3} OR q.tags ILIKE $${index * 4 + 2} OR q.error_type ILIKE $${index * 4 + 4})`).join(' OR ');
 
-    // Note: Params are already pushed in the loop above.
-    // However, for the WHERE clause we need to reuse the same params.
-    // In Postgres, we can reuse $n.
-    // The params array has [k1, k1, k1, k1, k2, k2, k2, k2 ...]
-    // The query construction above matches this order.
+    // We need separate params for the second part of UNION if we use positional args strictly, 
+    // OR we can just use the same params if we construct the query carefully. 
+    // To avoid param index hell, let's do two queries and merge in memory (easier to maintain & debug).
 
-    const sql = `
-        SELECT q.*, u.username as author_name, 
+    const sqlQ = `
+        SELECT q.id, q.title, q.summary, q.tags, 'question' as type, q.created_at, u.username as author_name,
         (SELECT COUNT(*) FROM answers WHERE question_id = q.id) as answer_count,
-        (SELECT COALESCE(SUM(value), 0) FROM votes WHERE target_type = 'question' AND target_id = q.id) as sql_score
+        (SELECT COALESCE(SUM(value), 0) FROM votes WHERE target_type = 'question' AND target_id = q.id) as score
         FROM questions q
         LEFT JOIN users u ON q.author_id = u.id
-        WHERE ${whereConditions}
+        WHERE ${whereConditionsQ}
         ORDER BY q.created_at DESC
-        LIMIT 50
+        LIMIT 20
     `;
 
-    pool.query(sql, params, (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
+    // Re-map params for Posts (Title & Content)
+    // We'll use a new set of params for the Post query to be safe
+    const paramsP = [];
+    sqlKeywords.forEach(k => {
+        const p = `%${k}%`;
+        paramsP.push(p, p);
+    });
 
-        // 4. Hybrid Ranking
-        const results = result.rows.map(row => {
-            const tfidfScore = tfidfScores[row.id] || 0;
-            const finalScore = parseInt(row.sql_score) + (tfidfScore * 10);
+    const whereConditionsP = sqlKeywords.map((_, index) => `(p.title ILIKE $${index * 2 + 1} OR p.content ILIKE $${index * 2 + 2})`).join(' OR ');
 
-            let fuzzyBonus = 0;
+    const sqlP = `
+        SELECT p.id, p.title, SUBSTRING(p.content, 1, 200) as summary, 'post' as tags, 'post' as type, p.created_at, u.username as author_name,
+        0 as answer_count,
+        (SELECT COALESCE(SUM(value), 0) FROM votes WHERE target_type = 'post' AND target_id = p.id) as score
+        FROM posts p
+        LEFT JOIN users u ON p.author_id = u.id
+        WHERE ${whereConditionsP}
+        ORDER BY p.created_at DESC
+        LIMIT 20
+    `;
+
+    Promise.all([
+        pool.query(sqlQ, params),
+        pool.query(sqlP, paramsP)
+    ]).then(([resQ, resP]) => {
+        let results = [...resQ.rows, ...resP.rows];
+
+        // Hybrid Ranking & Sorting
+        results = results.map(row => {
+            let relevance = 0;
+            // Simple scoring based on keyword presence in title
             sqlKeywords.forEach(kw => {
-                const dist = natural.JaroWinklerDistance(kw, row.title.toLowerCase());
-                if (dist > 0.9) fuzzyBonus += 2;
+                if (row.title.toLowerCase().includes(kw)) relevance += 5;
+                if (row.summary && row.summary.toLowerCase().includes(kw)) relevance += 2;
+                if (row.tags && row.tags.toLowerCase().includes(kw)) relevance += 3;
             });
 
-            return { ...row, relevance_score: finalScore + fuzzyBonus, tfidf: tfidfScore };
+            // Add fuzzy bonus
+            sqlKeywords.forEach(kw => {
+                const dist = natural.JaroWinklerDistance(kw, row.title.toLowerCase());
+                if (dist > 0.9) relevance += 2;
+            });
+
+            return { ...row, relevance_score: relevance + parseInt(row.score) };
         });
 
         results.sort((a, b) => b.relevance_score - a.relevance_score);
         res.json(results.slice(0, 20));
+
+    }).catch(err => {
+        res.status(500).json({ error: err.message });
     });
 });
 
@@ -411,18 +553,26 @@ app.get('/api/questions/:id', (req, res) => {
     });
 });
 
-// Create question
-app.post('/api/questions', (req, res) => {
-    const { title, module, environment, error_type, summary, snippet, steps, expected, observed, tags, author_id } = req.body;
-    const sql = `INSERT INTO questions (title, module, environment, error_type, summary, snippet, steps, expected, observed, tags, author_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`;
-    const params = [title, module, environment, error_type, summary, snippet, steps, expected, observed, tags, author_id];
+// Create question with Image Upload
+app.post('/api/questions', upload.single('image'), (req, res) => {
+    const { title, content, tags, author_id } = req.body;
+
+    if (!title || !content) {
+        return res.status(400).json({ error: "Title and Description are required." });
+    }
+
+    const image_url = req.file ? `/uploads/${req.file.filename}` : null;
+
+    // Insert with new content field. Old fields left null.
+    const sql = `INSERT INTO questions (title, content, tags, image_url, author_id) VALUES ($1, $2, $3, $4, $5) RETURNING id`;
+    const params = [title, content, tags, image_url, author_id];
 
     pool.query(sql, params, (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
         const newId = result.rows[0].id;
 
         // Update Search Index
-        const text = `${title} ${summary} ${tags} ${error_type}`;
+        const text = `${title} ${content} ${tags}`;
         tfidf.addDocument(text);
         searchIndexMap[tfidf.documents.length - 1] = newId;
 
@@ -430,13 +580,15 @@ app.post('/api/questions', (req, res) => {
     });
 });
 
-// Create Answer
-app.post('/api/questions/:id/answers', (req, res) => {
+// Create Answer with Image Upload
+app.post('/api/questions/:id/answers', upload.single('image'), (req, res) => {
     const questionId = req.params.id;
     const { root_cause, fix_summary, config_changes, validation_steps, author_id } = req.body;
-    const sql = `INSERT INTO answers (question_id, root_cause, fix_summary, config_changes, validation_steps, author_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`;
+    const image_url = req.file ? `/uploads/${req.file.filename}` : null;
 
-    pool.query(sql, [questionId, root_cause, fix_summary, config_changes, validation_steps, author_id], (err, result) => {
+    const sql = `INSERT INTO answers (question_id, root_cause, fix_summary, config_changes, validation_steps, image_url, author_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`;
+
+    pool.query(sql, [questionId, root_cause, fix_summary, config_changes, validation_steps, image_url, author_id], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Notify Question Author
@@ -454,18 +606,21 @@ app.post('/api/questions/:id/answers', (req, res) => {
     });
 });
 
-// Create Comment
-app.post('/api/comments', (req, res) => {
+// Create Comment with Image Upload
+app.post('/api/comments', upload.single('image'), (req, res) => {
     const { parent_type, parent_id, content, author_id } = req.body;
-    const sql = `INSERT INTO comments (parent_type, parent_id, content, author_id) VALUES ($1, $2, $3, $4) RETURNING id`;
+    const image_url = req.file ? `/uploads/${req.file.filename}` : null;
 
-    pool.query(sql, [parent_type, parent_id, content, author_id], (err, result) => {
+    const sql = `INSERT INTO comments (parent_type, parent_id, content, image_url, author_id) VALUES ($1, $2, $3, $4, $5) RETURNING id`;
+
+    pool.query(sql, [parent_type, parent_id, content, image_url, author_id], (err, result) => {
         if (err) return res.status(500).json({ error: err.message });
 
         // Notify Parent Author
         let fetchAuthorSql = "";
         if (parent_type === 'question') fetchAuthorSql = "SELECT author_id, id as target_id FROM questions WHERE id = $1";
-        else fetchAuthorSql = "SELECT author_id, question_id as target_id FROM answers WHERE id = $1";
+        else if (parent_type === 'answer') fetchAuthorSql = "SELECT author_id, question_id as target_id FROM answers WHERE id = $1";
+        else if (parent_type === 'post') fetchAuthorSql = "SELECT author_id, id as target_id FROM posts WHERE id = $1";
 
         pool.query(fetchAuthorSql, [parent_id], (err, resParent) => {
             if (!err && resParent.rows[0]) {
@@ -499,9 +654,11 @@ app.post('/api/vote', (req, res) => {
         // Update Reputation
         // Simple logic: +10 for upvote, -2 for downvote (applied to author)
         // We need to find the author first
-        const table = target_type === 'questions' ? 'questions' : 'answers'; // target_type is singular in API but table is plural
-        // Actually API sends 'question' or 'answer' (singular). Table is plural.
-        const tableName = target_type + 's';
+        let tableName;
+        if (target_type === 'question') tableName = 'questions';
+        else if (target_type === 'answer') tableName = 'answers';
+        else if (target_type === 'post') tableName = 'posts';
+        else return res.status(400).json({ error: "Invalid target_type for vote" });
 
         pool.query(`SELECT author_id FROM ${tableName} WHERE id = $1`, [target_id], (err, resAuthor) => {
             if (!err && resAuthor.rows[0]) {
